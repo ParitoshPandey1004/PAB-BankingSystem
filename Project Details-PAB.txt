@@ -1,0 +1,115 @@
+======================================================================
+             BANK-TO-BANK PAYMENT SYSTEM - ARCHITECTURE FLOW
+======================================================================
+
+TECH STACK:
+-----------
+Backend     : Java 17+, Spring Boot, Spring Data JPA, Hibernate, Spring Batch, IBM MQ, PL/SQL
+Frontend    : Angular 19, HTML5, CSS3, JavaScript
+Database    : Oracle 19c
+Message Queue: IBM MQ
+
+======================================================================
+MODULE LAYOUT:
+==============
+
+1. BANK MODULES
+----------------
+
+   ┌───────────────────────────────────────┐        ┌───────────────────────────────────────┐
+   │               BANK 1                 │        │               BANK 2                 │
+   │  - Bank1_Account Table               │        │  - Bank2_Account Table               │
+   │  - Bank1_Outgoing_Payments Table     │        │  - Bank2_Outgoing_Payments Table     │
+   │  - Bank1_Incoming_Payments Table     │        │  - Bank2_Incoming_Payments Table     │
+   └───────────────────────────────────────┘        └───────────────────────────────────────┘
+                           │                                  │
+                           └────────────┬─────────────────────┘
+                                        ▼
+                           ┌────────────────────────────┐
+                           │      TB_RP_T_MQ Table      │
+                           │  - MQ_ID                   │
+                           │  - PAYMENT_ID              │
+                           │  - SENDER_BANK             │
+                           │  - RECEIVER_BANK           │
+                           │  - STATUS (SENT/RECEIVED)  │
+                           │  - TIMESTAMP               │
+                           └────────────────────────────┘
+
+2. MESSAGING (IBM MQ)
+-----------------------
+   - IBM MQ used for inter-bank message (payment) transfer
+   - MQ direction saved in `TB_RP_T_MQ` table
+   - Use Spring JMS/IBM MQ Integration
+
+3. API LAYER
+------------
+   - `/bank1/incoming-payments`
+   - `/bank1/outgoing-payments`
+   - `/bank2/incoming-payments`
+   - `/bank2/outgoing-payments`
+   - `/bank1/send-payment`
+   - `/bank2/send-payment`
+   - `/mq/payments` → list of all MQ messages
+   - `/dashboard/payments` → show all payments
+
+4. DASHBOARD (ANGULAR)
+------------------------
+   - Charts for Sent/Received Payment Volume
+   - Filters (date, status, bank)
+   - CSV Export Button
+   - CSV Upload Form (bulk payments)
+   - Calls `/dashboard/payments` API
+   - Uses PL/SQL backend for optimized reads
+
+5. CSV HANDLER
+---------------
+   - Upload CSV file (bulk payments)
+   - Validate → Save to staging table
+   - Processed using `Spring Batch`
+   - Store result in MQ + Payment Tables
+
+6. SPRING BATCH (Bulk Processing)
+----------------------------------
+   - Read: Oracle Staging Table
+   - Process: Validate + Send via MQ
+   - Write: Log to `TB_RP_T_MQ` and update Bank tables
+   - Schedule or trigger via API
+
+7. AUTH MODULE
+---------------
+   - Spring Security + JWT-based login
+   - Roles: ADMIN, BANK1_USER, BANK2_USER
+   - Endpoint protection
+
+8. ORACLE DB STRUCTURE
+-----------------------
+   - Tables:
+     • BANK1_ACCOUNTS
+     • BANK2_ACCOUNTS
+     • BANK1_INCOMING_PAYMENTS
+     • BANK1_OUTGOING_PAYMENTS
+     • BANK2_INCOMING_PAYMENTS
+     • BANK2_OUTGOING_PAYMENTS
+     • TB_RP_T_MQ
+     • STAGING_CSV_PAYMENTS
+
+   - Views for PL/SQL Optimized Dashboard:
+     • VW_ALL_PAYMENTS
+     • VW_MQ_TRAFFIC_SUMMARY
+
+9. BACKEND LAYERING
+--------------------
+   - Controller Layer → REST API
+   - Service Layer → Business Logic
+   - DAO/Repository Layer → JPA + Hibernate
+   - MQ Producer/Consumer Layer
+   - Batch Job Configurations
+
+======================================================================
+DEPLOYMENT OVERVIEW
+====================
+Frontend (Angular 19)  → Deployed on NGINX / Apache / Cloud
+Backend (Spring Boot)  → Packaged as JAR → Deployed on Tomcat or Kubernetes
+Oracle DB              → Managed Server (19c)
+IBM MQ                 → External MQ Server / Local Dev Queue Manager
+======================================================================
